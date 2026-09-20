@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>围度与体重追踪 App</title>
+    
+    <!-- iOS 原生 APP 全屏沉浸式配置 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="围度追踪">
+    
+    <!-- Android / Chrome Web App Manifest (动态内联) -->
+    <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22%E8%BA%AB%E4%BD%93%E5%9B%B4%E5%BA%A6%E4%B8%8E%E4%BD%93%E9%87%8D%E8%BF%BD%E2%85%BC%22%2C%22short_name%22%3A%22%E5%9B%B4%E5%BA%A6%E8%BF%BD%E2%85%BC%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f8fafc%22%2C%22theme_color%22%3A%22%234f46e5%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20512%20512%27%3E%3Crect%20width%3D%27512%27%20height%3D%27512%27%20rx%3D%27128%27%20fill%3D%27%234f46e5%27%2F%3E%3Cpath%20d%3D%27M256%20112c-53%200-96%2043-96%2096%200%2072%2096%20192%2096%20192s96-120%2096-192c0-53-43-96-96-96z%27%20fill%3D%27%23ffffff%27%2F%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+    
+    <!-- App 图标配置 -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='128' fill='%234f46e5'/><path d='M256 128c-53 0-96 43-96 96 0 72 96 192 96 192s96-120 96-192c0-53-43-96-96-96z' fill='%23ffffff'/></svg>">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome 图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        /* 防刘海屏与底栏安全区域 */
+        .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+        
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+    </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col antialiased selection:bg-indigo-500 selection:text-white bg-slate-50 pb-safe">
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm pt-safe">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-14 sm:h-16 items-center">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+                        <i class="fa-solid fa-heart-pulse text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold text-slate-900 leading-tight">围度与体重</h1>
+                        <p class="text-[10px] text-slate-500">离线App · 趋势分析</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-1.5 sm:space-x-2">
+                    <button id="guideBtn" class="px-2.5 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1">
+                        <i class="fa-solid fa-mobile-screen-button"></i>
+                        <span class="hidden sm:inline">添加到手机</span>
+                    </button>
+                    <button id="exportJsonBtn" class="p-2 sm:px-3 sm:py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors" title="备份数据">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
+                    <label for="importJsonInput" class="p-2 sm:px-3 sm:py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors" title="恢复数据">
+                        <i class="fa-solid fa-upload"></i>
+                    </label>
+                    <input type="file" id="importJsonInput" accept=".json" class="hidden">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 space-y-4 sm:space-y-6">
+
+        <!-- 顶部核心数据对比卡片 -->
+        <section id="summaryCards" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-4">
+            <!-- 动态生成... -->
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+            
+            <div class="lg:col-span-5 space-y-4 sm:space-y-6">
+                
+                <!-- 录入与编辑卡片 -->
+                <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 id="formTitle" class="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-pen-to-square text-indigo-600"></i>
+                            登记今日测量
+                        </h2>
+                        <button id="cancelEditBtn" class="hidden text-xs text-rose-500 hover:underline">
+                            取消编辑
+                        </button>
+                    </div>
+
+                    <form id="recordForm" class="space-y-3">
+                        <input type="hidden" id="editIndex" value="-1">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">日期</label>
+                            <input type="date" id="inputDate" required class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">体重 (kg)</label>
+                                <input type="number" step="0.1" id="inputWeight" placeholder="0.0" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">腰围-肚脐 (cm)</label>
+                                <input type="number" step="0.1" id="inputWaistNavel" placeholder="0.0" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">腰围-最细 (cm)</label>
+                                <input type="number" step="0.1" id="inputWaistNarrow" placeholder="0.0" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">大腿围 (cm)</label>
+                                <input type="number" step="0.1" id="inputThigh" placeholder="0.0" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                            <div class="col-span-2 sm:col-span-1">
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">小腿围 (cm)</label>
+                                <input type="number" step="0.1" id="inputCalf" placeholder="0.0" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <button type="submit" id="saveSubmitBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl shadow-md shadow-indigo-100 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+                            <i class="fa-solid fa-check"></i>
+                            保存数据
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 历史明细表 -->
+                <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 flex flex-col max-h-[380px] sm:max-h-[500px]">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-indigo-600"></i>
+                            历史记录
+                        </h2>
+                        <span id="recordCount" class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">0 条</span>
+                    </div>
+
+                    <div id="recordList" class="flex-1 overflow-y-auto space-y-2 pr-1">
+                        <!-- 记录列表... -->
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="lg:col-span-7 space-y-4 sm:space-y-6">
+                
+                <!-- 折线图表模块 -->
+                <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 flex flex-col h-full min-h-[420px] sm:min-h-[500px]">
+                    
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                        <!-- 指标选择器 -->
+                        <div class="flex items-center space-x-2">
+                            <label class="text-xs font-bold text-slate-400">指标:</label>
+                            <select id="metricSelect" class="bg-slate-100 border-0 text-slate-800 text-xs sm:text-sm rounded-xl px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none font-bold">
+                                <option value="weight">体重 (kg)</option>
+                                <option value="waistNavel">腰围-肚脐 (cm)</option>
+                                <option value="waistNarrow">腰围-最细 (cm)</option>
+                                <option value="thigh">大腿围 (cm)</option>
+                                <option value="calf">小腿围 (cm)</option>
+                            </select>
+                        </div>
+
+                        <!-- 时间维度切分 -->
+                        <div class="flex items-center justify-between sm:justify-end gap-2">
+                            <div class="bg-slate-100 p-1 rounded-xl flex space-x-1" id="timeFrameBtns">
+                                <button data-frame="day" class="time-frame-btn px-3 py-1 text-xs font-semibold rounded-lg transition-all bg-white text-indigo-600 shadow-sm">日</button>
+                                <button data-frame="week" class="time-frame-btn px-3 py-1 text-xs font-semibold rounded-lg transition-all text-slate-600">周</button>
+                                <button data-frame="month" class="time-frame-btn px-3 py-1 text-xs font-semibold rounded-lg transition-all text-slate-600">月</button>
+                            </div>
+
+                            <select id="aggregateMode" class="hidden bg-slate-100 border-0 text-slate-600 text-xs rounded-xl px-2 py-1 outline-none">
+                                <option value="avg">均值</option>
+                                <option value="last">末值</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Chart Canvas -->
+                    <div class="flex-1 relative pt-3 min-h-[280px]">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+
+                    <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                        <span><i class="fa-solid fa-chart-line mr-1"></i>滑动或缩放图表查看详情</span>
+                        <span id="chartRangeInfo"></span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+
+    <!-- 安装引导弹窗 -->
+    <div id="guideModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4 shadow-2xl transform translate-y-10 transition-all duration-300" id="guideModalCard">
+            <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-mobile-screen text-indigo-600"></i>
+                    添加到手机主屏幕
+                </h3>
+                <button id="closeGuideBtn" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3 text-xs text-slate-600 leading-relaxed">
+                <p class="font-semibold text-slate-800">无需在 App Store 下载，直接安装为桌面小应用：</p>
+                
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
+                    <div class="font-bold text-indigo-600 flex items-center gap-1.5">
+                        <i class="fa-brands fa-apple"></i> iPhone / iPad (Safari 浏览器)
+                    </div>
+                    <ol class="list-decimal list-inside space-y-1 pl-1 text-slate-500">
+                        <li>在 Safari 中打开当前网页</li>
+                        <li>点击底部菜单栏正中间的 <strong>分享图标 <i class="fa-solid fa-arrow-up-from-bracket"></i></strong></li>
+                        <li>向上滑动，选择 <strong>“添加到主屏幕”</strong></li>
+                    </ol>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
+                    <div class="font-bold text-emerald-600 flex items-center gap-1.5">
+                        <i class="fa-brands fa-android"></i> Android 安卓 (Chrome / 微信 / 手机浏览器)
+                    </div>
+                    <ol class="list-decimal list-inside space-y-1 pl-1 text-slate-500">
+                        <li>用自带浏览器或 Chrome 打开此网页</li>
+                        <li>点击右上角菜单 <strong>“⋮”</strong> 或底部选项</li>
+                        <li>选择 <strong>“添加至主屏幕”</strong> 或 <strong>“创建快捷方式”</strong></li>
+                    </ol>
+                </div>
+            </div>
+
+            <button id="confirmGuideBtn" class="w-full py-2.5 bg-indigo-600 text-white font-medium text-xs rounded-xl shadow-md">
+                我知道了
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div id="toast" class="fixed bottom-6 right-1/2 transform translate-x-1/2 sm:translate-x-0 sm:right-6 translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 z-50 whitespace-nowrap">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toastMessage">提示信息</span>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'body_metrics_data_v2';
+        
+        const metricConfigs = {
+            weight: { label: '体重', unit: 'kg', color: '#6366f1' },
+            waistNavel: { label: '腰围-肚脐', unit: 'cm', color: '#f59e0b' },
+            waistNarrow: { label: '腰围-最细', unit: 'cm', color: '#ec4899' },
+            thigh: { label: '大腿围', unit: 'cm', color: '#10b981' },
+            calf: { label: '小腿围', unit: 'cm', color: '#06b6d4' }
+        };
+
+        let records = [];
+        let currentFrame = 'day';
+        let chartInstance = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadRecords();
+            initDateInput();
+            initChart();
+            bindEvents();
+            renderAll();
+        });
+
+        function loadRecords() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                records = data ? JSON.parse(data) : getMockData();
+                sortRecordsByDate();
+            } catch (e) {
+                console.error('读取数据失败', e);
+                records = [];
+            }
+        }
+
+        function saveRecords() {
+            sortRecordsByDate();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+            renderAll();
+        }
+
+        function sortRecordsByDate() {
+            records.sort((a, b) => new Date(a.date) - new Date(b.date));
+        }
+
+        function initDateInput() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('inputDate').value = today;
+        }
+
+        function getMockData() {
+            const list = [];
+            const now = new Date();
+            for (let i = 28; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                const dateStr = d.toISOString().split('T')[0];
+                const diff = (28 - i);
+                list.push({
+                    date: dateStr,
+                    weight: parseFloat((70.5 - diff * 0.08 + Math.sin(i) * 0.2).toFixed(1)),
+                    waistNavel: parseFloat((82.0 - diff * 0.09 + Math.cos(i) * 0.3).toFixed(1)),
+                    waistNarrow: parseFloat((76.0 - diff * 0.07 + Math.sin(i) * 0.2).toFixed(1)),
+                    thigh: parseFloat((55.0 - diff * 0.04).toFixed(1)),
+                    calf: parseFloat((37.0 - diff * 0.02).toFixed(1))
+                });
+            }
+            return list;
+        }
+
+        function renderAll() {
+            renderSummaryCards();
+            renderRecordList();
+            updateChart();
+        }
+
+        function renderSummaryCards() {
+            const container = document.getElementById('summaryCards');
+            container.innerHTML = '';
+
+            if (records.length === 0) {
+                container.innerHTML = `<div class="col-span-full py-4 text-center text-xs text-slate-400 bg-white rounded-xl border border-slate-200">暂无数据，请添加记录</div>`;
+                return;
+            }
+
+            const latest = records[records.length - 1];
+            const initial = records[0];
+
+            const latestDate = new Date(latest.date);
+            const weekAgoDate = new Date(latestDate); weekAgoDate.setDate(weekAgoDate.getDate() - 7);
+
+            const lastWeekRec = findClosestRecord(weekAgoDate);
+
+            Object.keys(metricConfigs).forEach(key => {
+                const cfg = metricConfigs[key];
+                const currentVal = latest[key];
+                const initialVal = initial ? initial[key] : null;
+                const weekVal = lastWeekRec ? lastWeekRec[key] : null;
+
+                const diffInitial = (currentVal !== null && initialVal !== null) ? (currentVal - initialVal).toFixed(1) : null;
+                const diffWeek = (currentVal !== null && weekVal !== null) ? (currentVal - weekVal).toFixed(1) : null;
+
+                const cardHtml = `
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${cfg.label}</div>
+                            <div class="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                                ${currentVal !== undefined && currentVal !== null ? currentVal : '--'}
+                                <span class="text-[10px] font-normal text-slate-500">${cfg.unit}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2 pt-1.5 border-t border-slate-100 text-[10px] space-y-0.5">
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-400">较初始:</span>
+                                ${formatDiffBadge(diffInitial)}
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-400">较上周:</span>
+                                ${formatDiffBadge(diffWeek)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
+
+        function findClosestRecord(targetDate) {
+            if (records.length === 0) return null;
+            return records.reduce((closest, item) => {
+                const itemDate = new Date(item.date);
+                const closestDate = new Date(closest.date);
+                return Math.abs(itemDate - targetDate) < Math.abs(closestDate - targetDate) ? item : closest;
+            });
+        }
+
+        function formatDiffBadge(diff) {
+            if (diff === null || isNaN(diff)) return `<span class="text-slate-300">--</span>`;
+            const num = parseFloat(diff);
+            if (num === 0) return `<span class="text-slate-500 font-semibold">0</span>`;
+            
+            const isDown = num < 0;
+            const colorClass = isDown ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+            const icon = isDown ? '↓' : '↑';
+            return `<span class="px-1 py-0.5 rounded font-bold ${colorClass}">${icon} ${Math.abs(num)}</span>`;
+        }
+
+        function renderRecordList() {
+            const listEl = document.getElementById('recordList');
+            document.getElementById('recordCount').textContent = `${records.length} 条`;
+
+            if (records.length === 0) {
+                listEl.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">暂无任何数据记录</div>`;
+                return;
+            }
+
+            const reversed = [...records].reverse();
+            listEl.innerHTML = reversed.map((rec) => {
+                const originalIndex = records.findIndex(r => r.date === rec.date);
+                return `
+                    <div class="p-2.5 bg-slate-50 hover:bg-indigo-50/40 rounded-xl transition-all border border-slate-100 flex items-center justify-between">
+                        <div class="space-y-0.5">
+                            <div class="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                <i class="fa-regular fa-calendar text-indigo-500 text-[10px]"></i>
+                                ${rec.date}
+                            </div>
+                            <div class="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
+                                ${rec.weight ? `<span>体: <strong class="text-slate-700">${rec.weight}</strong></span>` : ''}
+                                ${rec.waistNavel ? `<span>脐: <strong class="text-slate-700">${rec.waistNavel}</strong></span>` : ''}
+                                ${rec.waistNarrow ? `<span>细: <strong class="text-slate-700">${rec.waistNarrow}</strong></span>` : ''}
+                                ${rec.thigh ? `<span>腿: <strong class="text-slate-700">${rec.thigh}</strong></span>` : ''}
+                                ${rec.calf ? `<span>小腿: <strong class="text-slate-700">${rec.calf}</strong></span>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <button onclick="editRecord(${originalIndex})" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-white transition-colors">
+                                <i class="fa-solid fa-pen-to-square text-xs"></i>
+                            </button>
+                            <button onclick="deleteRecord(${originalIndex})" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-white transition-colors">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            padding: 8,
+                            cornerRadius: 8,
+                            titleFont: { size: 11, weight: 'bold' },
+                            bodyFont: { size: 11 }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 9 }, color: '#64748b' }
+                        },
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { size: 9 }, color: '#64748b' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (!chartInstance) return;
+
+            const metric = document.getElementById('metricSelect').value;
+            const mode = document.getElementById('aggregateMode').value;
+            const cfg = metricConfigs[metric];
+
+            const processedData = aggregateData(records, metric, currentFrame, mode);
+
+            document.getElementById('chartRangeInfo').textContent = `${processedData.labels.length} 个数据节点`;
+
+            chartInstance.data.labels = processedData.labels;
+            chartInstance.data.datasets = [{
+                label: `${cfg.label} (${cfg.unit})`,
+                data: processedData.values,
+                borderColor: cfg.color,
+                backgroundColor: cfg.color + '15',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                pointBackgroundColor: cfg.color,
+                pointRadius: processedData.labels.length > 20 ? 1.5 : 3,
+                pointHoverRadius: 5
+            }];
+
+            chartInstance.update();
+        }
+
+        function aggregateData(dataList, metric, frame, aggMode) {
+            if (dataList.length === 0) return { labels: [], values: [] };
+
+            if (frame === 'day') {
+                return {
+                    labels: dataList.map(r => r.date),
+                    values: dataList.map(r => r[metric] !== undefined ? r[metric] : null)
+                };
+            }
+
+            const groups = {};
+
+            dataList.forEach(item => {
+                if (item[metric] === null || item[metric] === undefined) return;
+                
+                let key = '';
+                const d = new Date(item.date);
+
+                if (frame === 'week') {
+                    const year = d.getFullYear();
+                    const firstJan = new Date(year, 0, 1);
+                    const dayNum = Math.floor((d - firstJan) / (24 * 60 * 60 * 1000));
+                    const weekNum = Math.ceil((dayNum + firstJan.getDay() + 1) / 7);
+                    key = `${year}-W${weekNum < 10 ? '0' + weekNum : weekNum}`;
+                } else if (frame === 'month') {
+                    key = item.date.substring(0, 7);
+                }
+
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(item[metric]);
+            });
+
+            const labels = Object.keys(groups);
+            const values = labels.map(key => {
+                const arr = groups[key];
+                if (arr.length === 0) return null;
+                if (aggMode === 'last') {
+                    return arr[arr.length - 1];
+                } else {
+                    const sum = arr.reduce((a, b) => a + b, 0);
+                    return parseFloat((sum / arr.length).toFixed(1));
+                }
+            });
+
+            return { labels, values };
+        }
+
+        function bindEvents() {
+            document.getElementById('recordForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveFormData();
+            });
+
+            document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+            document.getElementById('metricSelect').addEventListener('change', updateChart);
+            document.getElementById('aggregateMode').addEventListener('change', updateChart);
+
+            document.getElementById('timeFrameBtns').addEventListener('click', (e) => {
+                const btn = e.target.closest('.time-frame-btn');
+                if (!btn) return;
+
+                document.querySelectorAll('.time-frame-btn').forEach(b => {
+                    b.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
+                    b.classList.add('text-slate-600');
+                });
+                btn.classList.add('bg-white', 'text-indigo-600', 'shadow-sm');
+                btn.classList.remove('text-slate-600');
+
+                currentFrame = btn.dataset.frame;
+                
+                const modeSelect = document.getElementById('aggregateMode');
+                if (currentFrame === 'day') {
+                    modeSelect.classList.add('hidden');
+                } else {
+                    modeSelect.classList.remove('hidden');
+                }
+
+                updateChart();
+            });
+
+            document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
+            document.getElementById('importJsonInput').addEventListener('change', importJSON);
+
+            // 弹窗引导逻辑
+            const guideModal = document.getElementById('guideModal');
+            const guideModalCard = document.getElementById('guideModalCard');
+            
+            const openModal = () => {
+                guideModal.classList.remove('opacity-0', 'pointer-events-none');
+                guideModalCard.classList.remove('translate-y-10');
+            };
+            const closeModal = () => {
+                guideModal.classList.add('opacity-0', 'pointer-events-none');
+                guideModalCard.classList.add('translate-y-10');
+            };
+
+            document.getElementById('guideBtn').addEventListener('click', openModal);
+            document.getElementById('closeGuideBtn').addEventListener('click', closeModal);
+            document.getElementById('confirmGuideBtn').addEventListener('click', closeModal);
+        }
+
+        function saveFormData() {
+            const date = document.getElementById('inputDate').value;
+            const weight = parseFloat(document.getElementById('inputWeight').value) || null;
+            const waistNavel = parseFloat(document.getElementById('inputWaistNavel').value) || null;
+            const waistNarrow = parseFloat(document.getElementById('inputWaistNarrow').value) || null;
+            const thigh = parseFloat(document.getElementById('inputThigh').value) || null;
+            const calf = parseFloat(document.getElementById('inputCalf').value) || null;
+
+            if (!date) {
+                showToast('请选择日期', 'error');
+                return;
+            }
+
+            const editIndex = parseInt(document.getElementById('editIndex').value);
+            const newRecord = { date, weight, waistNavel, waistNarrow, thigh, calf };
+
+            if (editIndex >= 0) {
+                records[editIndex] = newRecord;
+                showToast('记录更新成功');
+            } else {
+                const existingIdx = records.findIndex(r => r.date === date);
+                if (existingIdx >= 0) {
+                    records[existingIdx] = newRecord;
+                    showToast('覆盖更新同日期记录');
+                } else {
+                    records.push(newRecord);
+                    showToast('保存成功');
+                }
+            }
+
+            saveRecords();
+            resetForm();
+        }
+
+        window.editRecord = function(index) {
+            const item = records[index];
+            if (!item) return;
+
+            document.getElementById('editIndex').value = index;
+            document.getElementById('inputDate').value = item.date;
+            document.getElementById('inputWeight').value = item.weight || '';
+            document.getElementById('inputWaistNavel').value = item.waistNavel || '';
+            document.getElementById('inputWaistNarrow').value = item.waistNarrow || '';
+            document.getElementById('inputThigh').value = item.thigh || '';
+            document.getElementById('inputCalf').value = item.calf || '';
+
+            document.getElementById('formTitle').innerHTML = `<i class="fa-solid fa-pen-to-square text-indigo-600"></i> 编辑数据 (${item.date})`;
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+            document.getElementById('saveSubmitBtn').innerHTML = `<i class="fa-solid fa-rotate"></i> 更新数据`;
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.deleteRecord = function(index) {
+            if (confirm(`确定要删除 ${records[index].date} 的记录吗？`)) {
+                records.splice(index, 1);
+                saveRecords();
+                showToast('记录已删除');
+            }
+        };
+
+        function resetForm() {
+            document.getElementById('editIndex').value = '-1';
+            document.getElementById('recordForm').reset();
+            initDateInput();
+
+            document.getElementById('formTitle').innerHTML = `<i class="fa-solid fa-pen-to-square text-indigo-600"></i> 登记今日测量`;
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            document.getElementById('saveSubmitBtn').innerHTML = `<i class="fa-solid fa-check"></i> 保存数据`;
+        }
+
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `body_metrics_backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('备份文件导出成功');
+        }
+
+        function importJSON(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const imported = JSON.parse(evt.target.result);
+                    if (Array.isArray(imported)) {
+                        records = imported;
+                        saveRecords();
+                        showToast('恢复数据成功！');
+                    } else {
+                        showToast('文件格式不符合要求', 'error');
+                    }
+                } catch (err) {
+                    showToast('解析失败，请检查文件格式', 'error');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.textContent = msg;
+            toastIcon.className = type === 'error' ? 'fa-solid fa-circle-xmark text-rose-400' : 'fa-solid fa-circle-check text-emerald-400';
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
